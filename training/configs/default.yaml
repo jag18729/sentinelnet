@@ -1,0 +1,27 @@
+# SentinelNet Default Training Configuration
+
+# Data
+data_dir: data
+batch_size: 256
+
+# Model
+model: sentinelnet
+hidden_dim: 128
+num_layers: 2
+dropout: 0.3
+
+# Training
+epochs: 50
+lr: 0.001
+min_lr: 0.000001
+weight_decay: 0.0001
+
+# Early stopping
+patience: 10
+
+# Checkpointing
+checkpoint_dir: checkpoints
+
+# Experiment tracking
+wandb: false
+run_name: null  # Auto-generated if null
