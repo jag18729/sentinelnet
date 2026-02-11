@@ -7,6 +7,7 @@ Features:
 - Learning rate scheduling (cosine annealing)
 - Early stopping
 - Model checkpointing
+- ARM64/Pi 5 optimizations
 - Mixed precision training (optional)
 """
 
@@ -14,6 +15,7 @@ import argparse
 import os
 from pathlib import Path
 from datetime import datetime
+import platform
 import yaml
 import torch
 import torch.nn as nn
@@ -21,6 +23,27 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 import wandb
+
+
+def configure_for_arm64():
+    """
+    Apply ARM64/Pi 5 specific optimizations.
+    
+    Key insights from Pi 5 ML performance testing:
+    - torch.compile() Inductor backend DEGRADES performance on aarch64
+    - OMP_NUM_THREADS=4 optimal for quad-core
+    - set_num_interop_threads(1) reduces overhead
+    """
+    is_arm = platform.machine() in ('aarch64', 'arm64')
+    
+    if is_arm:
+        print("[*] ARM64 detected - applying Pi 5 optimizations")
+        os.environ['OMP_NUM_THREADS'] = '4'
+        torch.set_num_threads(4)
+        torch.set_num_interop_threads(1)
+        # NOTE: Do NOT use torch.compile() on ARM64
+        return True
+    return False
 
 # Add parent to path for imports
 import sys
@@ -101,9 +124,14 @@ def validate(
 
 def train(config: dict) -> None:
     """Main training function."""
+    # ARM64 optimizations (Pi 5)
+    is_arm = configure_for_arm64()
+    
     # Setup device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"[*] Using device: {device}")
+    if is_arm:
+        print("[*] Note: torch.compile() disabled on ARM64 (Inductor degrades performance)")
     
     # Setup wandb
     if config.get('wandb', False):

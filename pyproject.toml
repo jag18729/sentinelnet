@@ -37,6 +37,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "matplotlib>=3.7.0",
     "seaborn>=0.12.0",
+    "pytorch-tabnet>=4.1.0",
 ]
 
 [project.optional-dependencies]
