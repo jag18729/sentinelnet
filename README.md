@@ -1,8 +1,21 @@
 # SentinelNet
 
-**PyTorch-based Network Intrusion Detection with Adversarial Robustness Research**
+**AI-powered network intrusion detection that learns to spot attacks, then learns to survive them.**
 
-A 1D-CNN + BiLSTM hybrid model for classifying network intrusion traffic, with adversarial robustness evaluation (FGSM, PGD, C&W). Built on CICIDS2017 (2.83M flows, 15 classes, 78 features). Training on CUDA, inference on ONNX Runtime (ARM64).
+## What Is This?
+
+Every time data moves across a network, it leaves a trail: packet sizes, durations, byte counts, flags. SentinelNet takes those raw network flow measurements and classifies them as either normal traffic or one of 14 attack types (DDoS, port scans, brute force, botnets, web exploits, etc.).
+
+What makes this different from a traditional firewall or signature-based IDS is that SentinelNet *learns* patterns from data rather than relying on hand-written rules. A firewall blocks known-bad IPs; SentinelNet can flag a novel attack it's never seen before, as long as the traffic pattern looks anomalous.
+
+The research angle is **adversarial robustness**: after training the model to detect attacks, we deliberately try to fool it with adversarial examples (tiny, calculated modifications to network flows that trick the model into misclassifying malicious traffic as benign). Then we retrain the model to resist those tricks. The goal is an IDS that holds up not just against attackers, but against attackers who know the model exists and are actively trying to evade it.
+
+## How It Works (Plain English)
+
+1. **Data in:** 2.83 million real network flows from the [CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) dataset, each described by 78 measurements (packet length, flow duration, flag counts, etc.)
+2. **Model learns:** A neural network trains on labeled examples ("this flow is a DDoS attack," "this flow is normal") until it can classify unseen flows with ~98% accuracy
+3. **Adversarial stress test:** We generate adversarial inputs designed to fool the model, measure how much accuracy drops, then retrain with those adversarial examples mixed in
+4. **Deploy:** The trained model exports to ONNX format and runs on a Raspberry Pi 5, classifying live network flows from a Palo Alto PA-220 firewall in real time
 
 ## Architecture
 
