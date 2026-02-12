@@ -18,7 +18,6 @@ import time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import numpy as np
-import torch
 import onnxruntime as ort
 
 # Prometheus metrics (optional)

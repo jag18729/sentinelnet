@@ -3,7 +3,7 @@
 Data preprocessing pipeline for network flow classification.
 
 Handles:
-- Loading CSV datasets (CICIDS2017, CSE-CIC-IDS2018)
+- Loading parquet/CSV datasets (CICIDS2017, CSE-CIC-IDS2018)
 - Cleaning inf/nan values
 - Label encoding
 - Feature normalization
@@ -157,21 +157,21 @@ def build_dataloaders(
         NetworkFlowDataset(X_train, y_train),
         batch_size=batch_size,
         shuffle=True,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True,
     )
     
     val_loader = DataLoader(
         NetworkFlowDataset(X_val, y_val),
         batch_size=batch_size,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True,
     )
     
     test_loader = DataLoader(
         NetworkFlowDataset(X_test, y_test),
         batch_size=batch_size,
-        num_workers=2,
+        num_workers=0,
         pin_memory=True,
     )
     
