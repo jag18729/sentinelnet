@@ -37,16 +37,25 @@ class NetworkFlowDataset(Dataset):
 
 
 def load_cicids2017(data_dir: Path) -> pd.DataFrame:
-    """Load all CICIDS2017 CSV files into single DataFrame."""
+    """Load CICIDS2017 from parquet shards or CSV files."""
+    # Try parquet first (preferred - faster, smaller)
+    parquet_files = sorted(data_dir.glob("train-*.parquet"))
+    if parquet_files:
+        print(f"[*] Loading {len(parquet_files)} parquet shards...")
+        dfs = []
+        for pf in parquet_files:
+            print(f"    - {pf.name}")
+            dfs.append(pd.read_parquet(pf))
+        return pd.concat(dfs, ignore_index=True)
+
+    # Fallback to CSV
     csv_dir = data_dir / "raw" / "cicids2017" / "MachineLearningCSV" / "MachineLearningCVE"
-    
     if not csv_dir.exists():
-        # Try alternate path
         csv_dir = data_dir / "raw" / "cicids2017"
     
     csv_files = list(csv_dir.glob("*.csv"))
     if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {csv_dir}")
+        raise FileNotFoundError(f"No parquet or CSV files found in {data_dir}")
     
     print(f"[*] Loading {len(csv_files)} CSV files...")
     dfs = []
