@@ -2,20 +2,21 @@
 
 **AI-powered network intrusion detection that learns to spot attacks, then learns to survive them.**
 
-## What Is This?
+## Overview
 
-Every time data moves across a network, it leaves a trail: packet sizes, durations, byte counts, flags. SentinelNet takes those raw network flow measurements and classifies them as either normal traffic or one of 14 attack types (DDoS, port scans, brute force, botnets, web exploits, etc.).
+SentinelNet is a deep learning-based Network Intrusion Detection System (NIDS) that classifies network traffic flows into 15 categories: benign and 14 attack types (DDoS, port scans, brute force, botnets, web exploits, etc.). It uses a hybrid 1D-CNN + BiLSTM architecture to extract both spatial and temporal features from raw flow statistics like packet sizes, durations, byte counts, and TCP flags.
 
-What makes this different from a traditional firewall or signature-based IDS is that SentinelNet *learns* patterns from data rather than relying on hand-written rules. A firewall blocks known-bad IPs; SentinelNet can flag a novel attack it's never seen before, as long as the traffic pattern looks anomalous.
+Traditional signature-based IDS tools match traffic against known attack patterns. SentinelNet instead learns those patterns from labeled data, which means it can generalize to novel attack variants it hasn't explicitly seen before, as long as the underlying flow characteristics are similar.
 
-The research angle is **adversarial robustness**: after training the model to detect attacks, we deliberately try to fool it with adversarial examples (tiny, calculated modifications to network flows that trick the model into misclassifying malicious traffic as benign). Then we retrain the model to resist those tricks. The goal is an IDS that holds up not just against attackers, but against attackers who know the model exists and are actively trying to evade it.
+The core research question is **adversarial robustness**. ML-based classifiers are vulnerable to adversarial examples: carefully crafted perturbations to input features that cause misclassification. In a network security context, this means an attacker who understands the model could subtly modify their traffic to evade detection. SentinelNet evaluates this threat using FGSM, PGD, and C&W attacks, then applies adversarial training to harden the model against evasion.
 
-## How It Works (Plain English)
+## How It Works
 
-1. **Data in:** 2.83 million real network flows from the [CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) dataset, each described by 78 measurements (packet length, flow duration, flag counts, etc.)
-2. **Model learns:** A neural network trains on labeled examples ("this flow is a DDoS attack," "this flow is normal") until it can classify unseen flows with ~98% accuracy
-3. **Adversarial stress test:** We generate adversarial inputs designed to fool the model, measure how much accuracy drops, then retrain with those adversarial examples mixed in
-4. **Deploy:** The trained model exports to ONNX format and runs on a Raspberry Pi 5, classifying live network flows from a Palo Alto PA-220 firewall in real time
+1. **Ingest:** 2.83 million labeled network flows from [CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html), each with 78 flow-level features
+2. **Train:** The model learns to map flow features → attack classification, currently achieving ~98% accuracy on held-out validation data
+3. **Attack:** Adversarial perturbations (FGSM, PGD, C&W) are applied to measure classifier robustness under evasion scenarios
+4. **Harden:** Adversarial training augments the dataset with perturbed samples, forcing the model to maintain accuracy even against crafted inputs
+5. **Deploy:** The trained model exports to ONNX and runs on a Raspberry Pi 5, classifying live flows from a Palo Alto PA-220 firewall via syslog
 
 ## Architecture
 
