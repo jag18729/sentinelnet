@@ -184,14 +184,31 @@ def train(config: dict) -> None:
         eta_min=config.get('min_lr', 1e-6),
     )
     
+    # Resume from checkpoint if specified
+    start_epoch = 1
+    resume_path = config.get('resume')
+    if resume_path:
+        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt['model_state_dict'])
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        start_epoch = ckpt.get('epoch', 0) + 1
+        best_val_acc = ckpt.get('val_acc', 0)
+        # Advance scheduler to correct position
+        for _ in range(start_epoch - 1):
+            scheduler.step()
+        print(f"[*] Resumed from {resume_path} at epoch {start_epoch} (best_acc={best_val_acc*100:.2f}%)")
+
     # Training loop
-    best_val_acc = 0
+    if not resume_path:
+        best_val_acc = 0
+    else:
+        best_val_acc = best_val_acc
     patience = config.get('patience', 10)
     patience_counter = 0
     checkpoint_dir = Path(config.get('checkpoint_dir', 'checkpoints'))
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
-    for epoch in range(1, config.get('epochs', 50) + 1):
+    for epoch in range(start_epoch, config.get('epochs', 50) + 1):
         # Train
         train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, epoch)
         
@@ -217,9 +234,25 @@ def train(config: dict) -> None:
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_acc': best_val_acc,
+                'scheduler_state_dict': scheduler.state_dict(),
                 'config': config,
             }, checkpoint_dir / 'best.pt')
             print(f"[✓] Saved best model (acc={best_val_acc*100:.2f}%)")
+        
+        # Periodic checkpoint (every N epochs)
+        save_every = config.get('save_every', 5)
+        if epoch % save_every == 0:
+            periodic_path = checkpoint_dir / f'epoch{epoch}_{val_metrics["val_acc"]*100:.2f}.pt'
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'val_acc': val_metrics['val_acc'],
+                'best_val_acc': best_val_acc,
+                'config': config,
+            }, periodic_path)
+            print(f"[✓] Periodic checkpoint saved: {periodic_path.name}")
         else:
             patience_counter += 1
         
@@ -246,6 +279,8 @@ def main():
     parser.add_argument('--epochs', type=int, help='Override epochs')
     parser.add_argument('--batch-size', type=int, help='Override batch size')
     parser.add_argument('--lr', type=float, help='Override learning rate')
+    parser.add_argument('--resume', type=str, default=None, help='Resume from checkpoint path')
+    parser.add_argument('--save-every', type=int, default=5, help='Save checkpoint every N epochs')
     args = parser.parse_args()
     
     # Load config
@@ -265,6 +300,9 @@ def main():
         config['batch_size'] = args.batch_size
     if args.lr:
         config['lr'] = args.lr
+    if args.resume:
+        config['resume'] = args.resume
+    config['save_every'] = args.save_every
     
     train(config)
 

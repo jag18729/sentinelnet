@@ -67,3 +67,6 @@ Thumbs.db
 # Secrets
 .env
 *.env
+*.parquet
+nohup.out
+exports/*.onnx
