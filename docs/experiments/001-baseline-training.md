@@ -158,7 +158,36 @@ All saved to `~/workspace/projects/sentinelnet/checkpoints/` on XPS:
 | `epoch45_83.96.pt` | 45 | 83.96% | 8.9 MB |
 | `epoch50_99.70.pt` | 50 | 99.70% | 8.9 MB |
 
-## 8. Limitations & Known Issues
+## 8. ONNX Deployment Validation
+
+**Export:** `best.pt` → `exports/sentinel.onnx` (3.0 MB, opset 17, dynamic batch)
+**Deployment:** pi2 (Raspberry Pi 5, 16GB) via FastAPI + ONNX Runtime
+**Class prediction match:** 100/100 (PyTorch vs ONNX on random inputs)
+**Max logit drift:** 0.0012 (LSTM float precision; argmax unaffected)
+
+### ONNX Validation (10K random sample from full dataset)
+
+| Class | Correct | Total | Accuracy |
+|-------|---------|-------|----------|
+| BENIGN | 7991 | 8004 | 99.84% |
+| Bot | 3 | 8 | 37.50% |
+| DDoS | 443 | 443 | 100.00% |
+| DoS GoldenEye | 26 | 26 | 100.00% |
+| DoS Hulk | 816 | 819 | 99.63% |
+| DoS Slowhttptest | 20 | 20 | 100.00% |
+| DoS slowloris | 19 | 19 | 100.00% |
+| FTP-Patator | 29 | 29 | 100.00% |
+| Infiltration | 1 | 1 | 100.00% |
+| PortScan | 601 | 602 | 99.83% |
+| SSH-Patator | 25 | 25 | 100.00% |
+| Web Attack – Brute Force | 0 | 3 | 0.00% |
+| Web Attack – XSS | 0 | 1 | 0.00% |
+
+**Aggregate ONNX accuracy: 99.74%**
+
+**Critical findings:** Bot (37.5%), Web Attack–Brute Force (0%), and Web Attack–XSS (0%) have poor recall. These are the rarest classes in CICIDS2017. The 99.72% headline number is dominated by BENIGN (80%+ of data). Per-class F1 with full confusion matrix is the P0 next step.
+
+## 9. Limitations & Known Issues
 
 1. **Class imbalance not addressed.** CICIDS2017 is >80% BENIGN traffic. High accuracy may mask poor recall on rare attack classes (Heartbleed, Infiltration, SQL Injection). Per-class precision/recall/F1 analysis needed.
 
