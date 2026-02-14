@@ -1,147 +1,110 @@
 # SentinelNet
 
-**AI-powered network intrusion detection that learns to spot attacks, then learns to survive them.**
+**Network Intrusion Detection with Adversarial Robustness — Deployed on Bare Metal**
 
-## Overview
+A PyTorch-based multi-class network intrusion detection system running on physically microsegmented infrastructure. Suricata IDS feeds real-time traffic telemetry through an ONNX inference pipeline for 15-class flow classification, deployed behind a Palo Alto PA-220 firewall with per-device security zones.
 
-SentinelNet is a deep learning-based Network Intrusion Detection System (NIDS) that classifies network traffic flows into 15 categories: benign and 14 attack types (DDoS, port scans, brute force, botnets, web exploits, etc.). It uses a hybrid 1D-CNN + BiLSTM architecture to extract both spatial and temporal features from raw flow statistics like packet sizes, durations, byte counts, and TCP flags.
-
-Traditional signature-based IDS tools match traffic against known attack patterns. SentinelNet instead learns those patterns from labeled data, which means it can generalize to novel attack variants it hasn't explicitly seen before, as long as the underlying flow characteristics are similar.
-
-The core research question is **adversarial robustness**. ML-based classifiers are vulnerable to adversarial examples: carefully crafted perturbations to input features that cause misclassification. In a network security context, this means an attacker who understands the model could subtly modify their traffic to evade detection. SentinelNet evaluates this threat using FGSM, PGD, and C&W attacks, then applies adversarial training to harden the model against evasion.
-
-## How It Works
-
-1. **Ingest:** 2.83 million labeled network flows from [CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html), each with 78 flow-level features
-2. **Train:** The model learns to map flow features → attack classification, currently achieving ~98% accuracy on held-out validation data
-3. **Attack:** Adversarial perturbations (FGSM, PGD, C&W) are applied to measure classifier robustness under evasion scenarios
-4. **Harden:** Adversarial training augments the dataset with perturbed samples, forcing the model to maintain accuracy even against crafted inputs
-5. **Deploy:** The trained model exports to ONNX and runs on a Raspberry Pi 5, classifying live flows from a Palo Alto PA-220 firewall via syslog
+This is not a notebook exercise. The model classifies live traffic on production hardware.
 
 ## Architecture
 
 ```
-Input (78 features)
-    ↓
-1D-CNN (feature extraction)
-    ↓
-BiLSTM (temporal patterns)
-    ↓
-Dense → Softmax (15 classes)
-
-Parameters: 768K
+Internet → UDM → PA-220 (9 policies, 3 NAT rules)
+                    │
+         ┌──────────┼──────────┐
+         │          │          │
+      dmz-mgmt  dmz-svc  dmz-security
+      (pi0)     (pi1)     (pi2: SentinelNet)
+                           ├── Suricata 8.0 (IDS)
+                           ├── Bridge (EVE → features)
+                           └── ONNX Runtime (inference)
 ```
 
-## Infrastructure
-
-| Role | Host | Hardware | Stack |
-|------|------|----------|-------|
-| **Training** | XPS (WSL2) | RTX 4060 Ti, 8GB VRAM | PyTorch 2.6 + CUDA 12.4 |
-| **Inference** | pi2 (Pi 5) | 16GB RAM, ARM64 | ONNX Runtime + FastAPI |
-| **Monitoring** | pi1 | Grafana + Prometheus | wandb dashboard |
-
-## Quick Start
-
-```bash
-# Clone and install
-git clone https://github.com/jag18729/sentinelnet.git
-cd sentinelnet
-python -m venv .venv && source .venv/bin/activate
-pip install -e '.[dev]'
-
-# Download CICIDS2017 (parquet, ~444MB)
-mkdir -p data
-for i in 0 1 2 3; do
-  wget -O data/train-${i}.parquet \
-    "https://huggingface.co/api/datasets/c01dsnap/CIC-IDS2017/parquet/default/train/${i}.parquet"
-done
-
-# Train
-python -m training.train --epochs 50 --batch-size 256 --wandb
-
-# Serve (ONNX inference)
-MODEL_PATH=models/sentinel.onnx python -m inference.serve
-```
+Physical port isolation per device. No VLANs. Every inter-zone packet logged.
 
 ## Status
 
 - [x] Project structure scaffolded
-- [x] Data pipeline implemented (parquet + CSV loading, stratified split)
-- [x] CICIDS2017 downloaded (4 parquet shards, 2.83M rows)
-- [x] Model verified on CUDA (768K params, 78→15)
-- [x] Training running — **Epoch 8/50, 98.43% accuracy, loss 0.039**
-- [x] wandb experiment tracking ([dashboard](https://wandb.ai/jag927-nasa/sentinelnet/runs/rp9sfghv))
-- [x] Pi2 inference server running (ONNX Runtime + FastAPI on :8000)
-- [ ] Export trained model to ONNX
-- [ ] Deploy real model to pi2
-- [ ] Adversarial attacks (FGSM, PGD, C&W)
-- [ ] Adversarial training
-- [ ] PA-220 syslog integration
+- [x] ONNX inference server deployed (pi2, port 8000)
+- [x] Suricata 8.0.3 capturing live traffic (AF_PACKET, ET Open)
+- [x] Real-time bridge: EVE JSON → CICIDS2017 features → classification
+- [x] PA-220 microsegmentation (dmz-security zone, 192.168.22.0/24)
+- [x] NVMe storage (Samsung PM9C1a, 962K random IOPS)
+- [ ] CICIDS2017 dataset download (in progress, XPS GPU)
+- [ ] Baseline model training (RTX 4060 Ti)
+- [ ] Full 78-feature extraction (NFStream integration)
+- [ ] Adversarial robustness evaluation (FGSM, PGD, C&W)
+- [ ] Multi-sensor architecture (Orange Pi RV2, RISC-V edge IDS)
 - [ ] Research paper draft
 
-## Training
-
-**Dataset:** CICIDS2017 (`c01dsnap/CIC-IDS2017` on HuggingFace)
-- 2,827,876 total flows → train 1,979,513 / val 424,181 / test 424,182
-- 15 classes: BENIGN, DDoS, PortScan, Bot, FTP-Patator, SSH-Patator, DoS variants, Web attacks, etc.
-
-**Current Run (2026-02-11):**
-| Epoch | Loss | Accuracy |
-|-------|------|----------|
-| 1 | 0.170 | 96.8% |
-| 2 | 0.058 | 97.9% |
-| 4 | 0.045 | 98.1% |
-| 7 | 0.040 | 98.3% |
-| 8 | 0.039 | 98.4% |
-
-**wandb:** https://wandb.ai/jag927-nasa/sentinelnet/runs/rp9sfghv
-
-## Key Commands
+## Quick Start
 
 ```bash
-# Training with wandb (offline mode for DNS-restricted hosts)
-WANDB_MODE=offline WANDB_PROJECT=sentinelnet \
-  python -m training.train --epochs 50 --batch-size 256 --wandb
+# Inference server (pi2)
+cd ~/workspace/projects/sentinelnet
+source .venv/bin/activate
+uvicorn inference.serve:app --host 0.0.0.0 --port 8000
 
-# Sync offline wandb run
-wandb sync wandb/offline-run-*/ --project sentinelnet --entity jag927-nasa
-
-# Inference server
-MODEL_PATH=models/sentinel.onnx ARTIFACTS_PATH=data/artifacts \
-  python -m inference.serve
+# Bridge (tails Suricata EVE, classifies flows)
+python -m inference.suricata_bridge
 
 # Health check
 curl http://localhost:8000/health
 
-# Predict
+# Single prediction
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{"features": [0.0, 1.0, ...]}'
+  -d '{"features": [80, 1000000, 10, 8, 5000, 3000, ...]}'  # 78 CICIDS features
 ```
 
-## Pipeline
+## Training (future, on XPS GPU)
 
+```bash
+# Download CICIDS2017
+python data/download_datasets.py
+
+# Train baseline
+python training/train.py --config configs/default.yaml
+
+# Adversarial evaluation
+python adversarial/attacks.py --model checkpoints/best.pt \
+  --attacks fgsm,pgd,cw --epsilon 0.05
+
+# Export to ONNX and deploy
+python models/export_onnx.py --model checkpoints/best.pt
+scp models/sentinel.onnx pi2:~/workspace/projects/sentinelnet/models/
+sudo systemctl restart sentinelnet
 ```
-PA-220 syslog → pi0 rsyslog → pi2 inference → pi1 Grafana
-                                    ↑
-XPS (train) → ONNX export → pi2 (serve)
-```
 
-## Integration Points
+## Services (pi2)
 
-| System | Integration |
-|--------|-------------|
-| PA-220 | Syslog → rsyslog (pi0) → flow parser → inference |
-| Grafana | Prometheus metrics from inference server |
-| wandb | Experiment tracking, loss/accuracy curves |
-| PostgreSQL | Prediction logging, experiment metadata |
+| Service | Port | Status |
+|---------|------|--------|
+| sentinelnet.service | 8000 | `systemctl status sentinelnet` |
+| sentinelnet-bridge.service | — | `systemctl status sentinelnet-bridge` |
+| suricata (Docker) | — | `docker ps \| grep suricata` |
 
 ## Docs
 
-- [PROPOSAL.md](./PROPOSAL.md) — Full research proposal
-- [docs/journal/](./docs/journal/) — Development journal
-- [training/configs/default.yaml](./training/configs/default.yaml) — Training hyperparameters
+- [PROPOSAL.md](./PROPOSAL.md) — Research proposal
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — Full deployment architecture, feature mapping, firewall policy, benchmarks
 
-## License
+## Hardware
 
-MIT
+| Node | Role | Specs |
+|------|------|-------|
+| pi2 | Inference + IDS | Pi 5, 16GB, 256GB NVMe, ARM Cortex-A76 |
+| XPS | Training | RTX 4060 Ti 8GB, CUDA 12.4 |
+| Orange Pi RV2 | Edge sensor (planned) | RISC-V, 4GB, 4×Ethernet |
+| PA-220 | Firewall | PAN-OS 10.2, physical microsegmentation |
+
+## Research Direction
+
+The core research question: **how robust are neural network-based NIDS against adversarial perturbations in network flow features?**
+
+We evaluate adversarial attacks (FGSM, PGD, C&W) against a PyTorch classifier trained on CICIDS2017, then measure defense effectiveness through adversarial training with ε-bounded perturbations. The deployed pipeline enables evaluation on both synthetic attacks and real traffic, bridging the gap between academic adversarial ML and operational network security.
+
+---
+
+*Rafael Garcia — CSUN CIT 2026*
+*Network Security Engineer | AI Security Researcher*
