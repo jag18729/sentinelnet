@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinelnet-api
+  namespace: sentinel
+  labels:
+    app: sentinelnet
+    component: api
+    tier: ml
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentinelnet
+      component: api
+  template:
+    metadata:
+      labels:
+        app: sentinelnet
+        component: api
+        tier: ml
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8000'
+        prometheus.io/path: '/metrics'
+    spec:
+      containers:
+      - name: sentinelnet
+        image: sentinelnet:v0.1.0
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: MODEL_PATH
+          value: /app/models/sentinel.onnx
+        - name: ARTIFACTS_PATH
+          value: /app/models
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 1Gi
+            cpu: '2'
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinelnet-api
+  namespace: sentinel
+  labels:
+    app: sentinelnet
+    component: api
+spec:
+  type: NodePort
+  selector:
+    app: sentinelnet
+    component: api
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30800
+    name: http
+    protocol: TCP

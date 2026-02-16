@@ -1,43 +1,19 @@
-# SentinelNet Docker Image
-# Multi-stage build for smaller final image
-
-# Build stage
-FROM python:3.11-slim as builder
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+RUN pip install --no-cache-dir     fastapi==0.128.8     uvicorn==0.40.0     onnxruntime==1.24.1     numpy==2.4.2     scikit-learn==1.8.0     pydantic==2.12.5     prometheus_client==0.21.1
 
-# Copy requirements and install
-COPY pyproject.toml .
-RUN pip install --no-cache-dir build && \
-    pip wheel --no-cache-dir --wheel-dir /wheels .
+# Copy application
+COPY inference/ ./inference/
+COPY models/ ./models/
 
-# Runtime stage
-FROM python:3.11-slim
+ENV MODEL_PATH=/app/models/sentinel.onnx
+ENV PYTHONPATH=/app
 
-WORKDIR /app
+EXPOSE 8000
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+HEALTHCHECK --interval=30s --timeout=5s --retries=3     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Copy wheels and install
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
-
-# Copy application code
-COPY . .
-
-# Create non-root user
-RUN useradd -m -u 1000 sentinel && \
-    chown -R sentinel:sentinel /app
-
-USER sentinel
-
-# Default command
-CMD ["python", "-m", "inference.serve"]
+CMD ["uvicorn", "inference.serve:app", "--host", "0.0.0.0", "--port", "8000"]
