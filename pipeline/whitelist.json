@@ -1,0 +1,57 @@
+{
+  "_comment": "Flows matching these patterns are excluded from anomaly alerting. Scored but not alerted.",
+  "rules": [
+    {
+      "name": "ssh-management",
+      "description": "ThinkStation SSH to Pi cluster",
+      "src_ip": "192.168.2.80",
+      "dst_port": 22
+    },
+    {
+      "name": "prometheus-scrape",
+      "description": "Prometheus on pi1 scraping SentinelNet on pi2",
+      "src_ip": "192.168.20.10",
+      "dst_port": 30800
+    },
+    {
+      "name": "prometheus-scrape-node",
+      "description": "Prometheus scraping node_exporter",
+      "src_ip": "192.168.20.10",
+      "dst_port": 9100
+    },
+    {
+      "name": "link-local-metadata",
+      "description": "Cloud metadata endpoint probes",
+      "dst_ip": "169.254.169.254"
+    },
+    {
+      "name": "tailscale-stun",
+      "description": "Tailscale STUN/DERP coordination",
+      "dst_port": 3478,
+      "proto": "UDP"
+    },
+    {
+      "name": "dns-queries",
+      "description": "DNS resolution to local AdGuard",
+      "dst_ip": "192.168.20.10",
+      "dst_port": 53
+    },
+    {
+      "name": "dns-queries-pi0",
+      "description": "DNS resolution to pi0 AdGuard",
+      "dst_ip": "192.168.21.10",
+      "dst_port": 53
+    },
+    {
+      "name": "wazuh-agent",
+      "description": "Wazuh agent communication",
+      "dst_port": 1514
+    },
+    {
+      "name": "loki-push",
+      "description": "Log shipping to Loki on pi1",
+      "dst_ip": "192.168.20.10",
+      "dst_port": 3100
+    }
+  ]
+}

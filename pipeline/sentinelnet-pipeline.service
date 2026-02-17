@@ -1,0 +1,25 @@
+[Unit]
+Description=SentinelNet Exfil Detection Pipeline
+After=network.target
+Wants=suricata.service
+
+[Service]
+Type=simple
+User=rafaeljg
+Environment=PYTHONUNBUFFERED=1
+Environment=EVE_PATH=/var/log/suricata/eve.json
+Environment=SENTINELNET_URL=http://localhost:30800
+Environment=LOKI_URL=http://192.168.20.10:3100
+Environment=SCALER_PATH=/home/rafaeljg/sentinelnet-models/exfil_scaler.json
+Environment=BATCH_SIZE=50
+Environment=BATCH_TIMEOUT_S=5
+Environment=MIN_PACKETS=3
+WorkingDirectory=/home/rafaeljg/sentinelnet-pipeline
+ExecStart=/usr/bin/python3 pipeline.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
