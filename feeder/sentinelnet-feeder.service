@@ -1,0 +1,14 @@
+[Unit]
+Description=SentinelNet scapy Traffic Feeder
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/rafaeljg/sentinelnet-feeder/feeder.py
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
