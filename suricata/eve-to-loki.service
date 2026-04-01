@@ -1,0 +1,19 @@
+[Unit]
+Description=Suricata EVE JSON to Loki Shipper
+After=network.target suricata.service tailscaled.service
+Wants=suricata.service
+
+[Service]
+ExecStart=/usr/bin/python3 /home/rafaeljg/sentinelnet-feeder/eve-to-loki.py
+Restart=always
+RestartSec=10
+User=root
+Environment=LOKI_URL=http://100.77.26.41:3100/loki/api/v1/push
+Environment=EVE_PATH=/var/log/suricata/eve.json
+Environment=BATCH_SIZE=50
+Environment=FLUSH_INTERVAL=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
