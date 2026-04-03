@@ -4,14 +4,14 @@ SentinelNet scapy Traffic Feeder (RV2 / RISC-V)
 Captures on end1 (SPAN port) in promiscuous mode, extracts 78 CICFlowMeter-compatible
 features per completed flow, POSTs to SentinelNet inference API on Pi2.
 """
-import time, math, logging, threading, requests
+import os, time, math, logging, threading, requests
 from collections import defaultdict
 from scapy.all import sniff, IP, IPv6, TCP, UDP, ICMP, conf
 
-INTERFACE  = "end1"
-INFER_URL  = "http://100.111.113.35:30800/predict"
-IDLE_TO    = 15    # seconds — expire flow if inactive
-ACTIVE_TO  = 600   # seconds — expire flow regardless
+INTERFACE  = os.getenv("FEEDER_INTERFACE", "end1")
+INFER_URL  = os.getenv("SENTINELNET_URL", "http://localhost:30800/predict")
+IDLE_TO    = int(os.getenv("FEEDER_IDLE_TIMEOUT", "15"))
+ACTIVE_TO  = int(os.getenv("FEEDER_ACTIVE_TIMEOUT", "600"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("feeder")

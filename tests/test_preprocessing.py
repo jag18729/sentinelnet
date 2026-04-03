@@ -82,12 +82,12 @@ class TestBuildDataloaders:
         df["Label"] = labels
         return df
 
-    def test_returns_six_items(self, sample_df):
+    def test_returns_seven_items(self, sample_df):
         result = build_dataloaders(df=sample_df, batch_size=32)
-        assert len(result) == 6
+        assert len(result) == 7
 
     def test_loader_produces_batches(self, sample_df):
-        train_loader, val_loader, test_loader, le, scaler, fnames = build_dataloaders(
+        train_loader, val_loader, test_loader, le, scaler, fnames, cw = build_dataloaders(
             df=sample_df, batch_size=32
         )
         batch_x, batch_y = next(iter(train_loader))
@@ -95,19 +95,24 @@ class TestBuildDataloaders:
         assert batch_y.shape[0] == batch_x.shape[0]
 
     def test_label_encoder_has_classes(self, sample_df):
-        _, _, _, le, _, _ = build_dataloaders(df=sample_df, batch_size=32)
+        _, _, _, le, _, _, _ = build_dataloaders(df=sample_df, batch_size=32)
         assert len(le.classes_) == 3
         assert "BENIGN" in le.classes_
 
     def test_scaler_fitted(self, sample_df):
-        _, _, _, _, scaler, _ = build_dataloaders(df=sample_df, batch_size=32)
+        _, _, _, _, scaler, _, _ = build_dataloaders(df=sample_df, batch_size=32)
         assert hasattr(scaler, "mean_")
         assert len(scaler.mean_) == 5
 
     def test_feature_names_returned(self, sample_df):
-        _, _, _, _, _, fnames = build_dataloaders(df=sample_df, batch_size=32)
+        _, _, _, _, _, fnames, _ = build_dataloaders(df=sample_df, batch_size=32)
         assert len(fnames) == 5
         assert all(f.startswith("feat_") for f in fnames)
+
+    def test_class_weights_returned(self, sample_df):
+        _, _, _, le, _, _, class_weights = build_dataloaders(df=sample_df, batch_size=32)
+        assert len(class_weights) == len(le.classes_)
+        assert all(w > 0 for w in class_weights)
 
     def test_no_label_column_raises(self):
         df = pd.DataFrame({"a": [1.0], "b": [2.0]})

@@ -1,0 +1,30 @@
+# SentinelNet Reduced-Feature Training Configuration
+# Trains on only the ~25 features extractable from Suricata EVE flow records.
+# This model is used by the Suricata bridge path to avoid the 20/78 feature gap.
+
+# Data
+data_dir: data
+batch_size: 256
+feature_subset: suricata_25  # Use features_suricata_25 from feature_manifest.json
+
+# Model
+model: sentinelnet
+hidden_dim: 64
+num_layers: 2
+dropout: 0.3
+
+# Training
+epochs: 50
+lr: 0.001
+min_lr: 0.000001
+weight_decay: 0.0001
+
+# Early stopping
+patience: 10
+
+# Checkpointing
+checkpoint_dir: checkpoints/suricata_reduced
+
+# Experiment tracking
+wandb: false
+run_name: null

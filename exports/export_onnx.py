@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Export trained SentinelNet model to ONNX format."""
 
+import hashlib
 import sys, pickle
 from pathlib import Path
 import torch
@@ -64,3 +65,10 @@ diff = np.abs(onnx_out - torch_out).max()
 print(f"ONNX vs PyTorch max diff: {diff:.8f}")
 assert diff < 1e-5, f"Mismatch too large: {diff}"
 print("✓ ONNX model verified - outputs match")
+
+# Generate SHA256 checksum for model versioning
+sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+checksum_path = output.with_suffix(".onnx.sha256")
+checksum_path.write_text(f"{sha256}  {output.name}\n")
+print(f"✓ SHA256: {sha256}")
+print(f"  Checksum saved to {checksum_path}")

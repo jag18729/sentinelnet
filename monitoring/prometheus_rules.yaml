@@ -1,0 +1,47 @@
+groups:
+  - name: sentinelnet
+    rules:
+      - alert: SentinelNetModelNotLoaded
+        expr: up{job="sentinelnet"} == 1 unless sentinelnet_predictions_total
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SentinelNet model not loaded"
+          description: "The SentinelNet inference server is up but has not made any predictions in 5 minutes, indicating the model may not be loaded."
+
+      - alert: SentinelNetHighLatency
+        expr: histogram_quantile(0.95, rate(sentinelnet_prediction_latency_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SentinelNet p95 latency > 500ms"
+          description: "95th percentile prediction latency is {{ $value | humanizeDuration }}, exceeding the 500ms SLA."
+
+      - alert: SentinelNetHighErrorRate
+        expr: rate(http_requests_total{job="sentinelnet", status=~"5.."}[5m]) / rate(http_requests_total{job="sentinelnet"}[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SentinelNet error rate > 1%"
+          description: "Server error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: SentinelNetPodDown
+        expr: up{job="sentinelnet"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SentinelNet inference pod is down"
+          description: "The SentinelNet pod has been unreachable for over 1 minute."
+
+      - alert: SentinelNetHighAttackRate
+        expr: sum(rate(sentinelnet_predictions_total{prediction_class!="BENIGN"}[5m])) / sum(rate(sentinelnet_predictions_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SentinelNet detecting > 10% attack traffic"
+          description: "{{ $value | humanizePercentage }} of classified flows are non-BENIGN over the last 10 minutes."

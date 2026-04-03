@@ -51,3 +51,65 @@ for cls in sorted(total_by_class.keys()):
     c = correct_by_class.get(cls, 0)
     t = total_by_class[cls]
     print(f"{cls:<30} {c:>8} {t:>8} {c/t*100:>7.2f}%")
+
+
+# --- Adversarial Robustness Evaluation ---
+print("\n" + "=" * 58)
+print("Adversarial Robustness Evaluation")
+print("=" * 58)
+
+try:
+    import torch
+    from models.sentinel_net import SentinelNet
+    from adversarial.attacks import fgsm_attack, pgd_attack
+
+    # Load PyTorch model for adversarial evaluation
+    ckpt = torch.load('checkpoints/best.pt', map_location='cpu', weights_only=False)
+    cfg = ckpt.get('config', {})
+    pt_model = SentinelNet(
+        input_dim=len(fnames),
+        num_classes=len(le.classes_),
+        hidden_dim=cfg.get('hidden_dim', 128),
+        num_layers=cfg.get('num_layers', 2),
+        dropout=cfg.get('dropout', 0.3),
+    )
+    pt_model.load_state_dict(ckpt['model_state_dict'])
+    pt_model.eval()
+
+    # Use a smaller sample for adversarial evaluation (expensive)
+    adv_idx = rng.choice(len(X_scaled), size=1000, replace=False)
+    X_adv_sample = torch.FloatTensor(X_scaled[adv_idx].astype(np.float32))
+    y_adv_sample = torch.LongTensor(y_true[adv_idx])
+
+    # Clean accuracy on PyTorch model
+    with torch.no_grad():
+        clean_preds = pt_model(X_adv_sample).argmax(dim=1)
+        clean_acc = (clean_preds == y_adv_sample).float().mean().item()
+
+    # FGSM attack
+    x_fgsm = fgsm_attack(pt_model, X_adv_sample, y_adv_sample, epsilon=0.05, clip_min=-5.0, clip_max=5.0)
+    with torch.no_grad():
+        fgsm_preds = pt_model(x_fgsm).argmax(dim=1)
+        fgsm_acc = (fgsm_preds == y_adv_sample).float().mean().item()
+
+    # PGD attack
+    x_pgd = pgd_attack(pt_model, X_adv_sample, y_adv_sample, epsilon=0.05, alpha=0.01, num_steps=20, clip_min=-5.0, clip_max=5.0)
+    with torch.no_grad():
+        pgd_preds = pt_model(x_pgd).argmax(dim=1)
+        pgd_acc = (pgd_preds == y_adv_sample).float().mean().item()
+
+    print(f"\n{'Attack':<20} {'Accuracy':>10} {'Drop':>10}")
+    print("-" * 42)
+    print(f"{'Clean':<20} {clean_acc*100:>9.2f}% {'':>10}")
+    print(f"{'FGSM (eps=0.05)':<20} {fgsm_acc*100:>9.2f}% {(clean_acc-fgsm_acc)*100:>+9.2f}%")
+    print(f"{'PGD-20 (eps=0.05)':<20} {pgd_acc*100:>9.2f}% {(clean_acc-pgd_acc)*100:>+9.2f}%")
+
+    # Warn if adversarial accuracy is very low
+    if pgd_acc < 0.5:
+        print(f"\n[!] WARNING: PGD accuracy ({pgd_acc*100:.1f}%) is below 50%.")
+        print("    Consider adversarial training before deploying this model.")
+
+except FileNotFoundError:
+    print("\n[!] Skipping adversarial evaluation: checkpoints/best.pt not found")
+except ImportError as e:
+    print(f"\n[!] Skipping adversarial evaluation: {e}")

@@ -22,6 +22,12 @@ patience: 10
 # Checkpointing
 checkpoint_dir: checkpoints
 
+# Adversarial training (disabled by default)
+adversarial_training: false
+adv_epsilon: 0.1
+adv_steps: 7
+adv_ratio: 0.5  # 50% clean, 50% adversarial
+
 # Experiment tracking
 wandb: false
 run_name: null  # Auto-generated if null

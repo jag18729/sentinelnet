@@ -12,6 +12,7 @@ Features:
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 from datetime import datetime
@@ -51,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.sentinel_net import get_model
 from preprocessing.pipeline import build_dataloaders, load_cicids2017
+from adversarial.attacks import pgd_attack
 
 
 def train_epoch(
@@ -122,6 +124,69 @@ def validate(
     }
 
 
+def train_adversarial_epoch(
+    model: nn.Module,
+    train_loader: torch.utils.data.DataLoader,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    device: str,
+    epoch: int,
+    epsilon: float = 0.1,
+    adv_steps: int = 7,
+    adv_ratio: float = 0.5,
+) -> dict:
+    """Train for one epoch with adversarial augmentation (PGD)."""
+    model.train()
+    total_loss = 0
+    correct = 0
+    total = 0
+
+    pbar = tqdm(train_loader, desc=f"Epoch {epoch} [ADV]")
+    for batch_idx, (x, y) in enumerate(pbar):
+        x, y = x.to(device), y.to(device)
+
+        # Clean forward pass
+        optimizer.zero_grad()
+        logits_clean = model(x)
+        loss_clean = criterion(logits_clean, y)
+
+        # Generate adversarial examples using PGD
+        model.eval()
+        x_adv = pgd_attack(
+            model, x, y,
+            epsilon=epsilon,
+            alpha=epsilon / 4,
+            num_steps=adv_steps,
+            clip_min=-5.0,  # StandardScaler data, not [0,1]
+            clip_max=5.0,
+        )
+        model.train()
+
+        # Adversarial forward pass
+        logits_adv = model(x_adv)
+        loss_adv = criterion(logits_adv, y)
+
+        # Combined loss
+        loss = (1 - adv_ratio) * loss_clean + adv_ratio * loss_adv
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        pred = logits_clean.argmax(dim=1)
+        correct += (pred == y).sum().item()
+        total += y.size(0)
+
+        pbar.set_postfix({
+            'loss': f"{total_loss/(batch_idx+1):.4f}",
+            'acc': f"{100*correct/total:.2f}%"
+        })
+
+    return {
+        'train_loss': total_loss / len(train_loader),
+        'train_acc': correct / total,
+    }
+
+
 def train(config: dict) -> None:
     """Main training function."""
     # ARM64 optimizations (Pi 5)
@@ -144,12 +209,30 @@ def train(config: dict) -> None:
     # Load data
     data_dir = Path(config.get('data_dir', 'data'))
     print(f"[*] Loading data from {data_dir}")
-    
+
+    # Load feature subset from manifest if configured
+    feature_subset = None
+    subset_key = config.get('feature_subset')
+    if subset_key:
+        manifest_path = data_dir / 'artifacts' / 'feature_manifest.json'
+        if manifest_path.exists():
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            feature_key = f"features_{subset_key}"
+            if feature_key in manifest:
+                feature_subset = manifest[feature_key]
+                print(f"[*] Using feature subset '{subset_key}': {len(feature_subset)} features")
+            else:
+                raise ValueError(f"Feature subset '{feature_key}' not found in manifest")
+        else:
+            raise FileNotFoundError(f"Feature manifest not found at {manifest_path}")
+
     df = load_cicids2017(data_dir)
-    train_loader, val_loader, test_loader, label_encoder, scaler, feature_names = build_dataloaders(
+    train_loader, val_loader, test_loader, label_encoder, scaler, feature_names, class_weights = build_dataloaders(
         df=df,
         batch_size=config.get('batch_size', 256),
         save_artifacts=data_dir / 'artifacts',
+        feature_subset=feature_subset,
     )
     
     # Create model
@@ -169,8 +252,9 @@ def train(config: dict) -> None:
     print(f"[*] Model: {config.get('model', 'sentinelnet')}")
     print(f"[*] Parameters: {sum(p.numel() for p in model.parameters()):,}")
     
-    # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
+    # Loss and optimizer (class weighting for imbalanced data)
+    weights_tensor = torch.FloatTensor(class_weights).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weights_tensor)
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config.get('lr', 1e-3),
@@ -208,9 +292,23 @@ def train(config: dict) -> None:
     checkpoint_dir = Path(config.get('checkpoint_dir', 'checkpoints'))
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
+    # Adversarial training config
+    use_adv_training = config.get('adversarial_training', False)
+    adv_epsilon = config.get('adv_epsilon', 0.1)
+    adv_steps = config.get('adv_steps', 7)
+    adv_ratio = config.get('adv_ratio', 0.5)
+    if use_adv_training:
+        print(f"[*] Adversarial training enabled: eps={adv_epsilon}, steps={adv_steps}, ratio={adv_ratio}")
+
     for epoch in range(start_epoch, config.get('epochs', 50) + 1):
-        # Train
-        train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, epoch)
+        # Train (adversarial or standard)
+        if use_adv_training:
+            train_metrics = train_adversarial_epoch(
+                model, train_loader, criterion, optimizer, device, epoch,
+                epsilon=adv_epsilon, adv_steps=adv_steps, adv_ratio=adv_ratio,
+            )
+        else:
+            train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, epoch)
         
         # Validate
         val_metrics = validate(model, val_loader, criterion, device)

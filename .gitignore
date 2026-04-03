@@ -39,6 +39,7 @@ ENV/
 # Data (large files)
 data/raw/
 data/artifacts/
+!data/artifacts/feature_manifest.json
 *.csv
 *.parquet
 *.zip

@@ -93,12 +93,13 @@ def build_dataloaders(
     test_split: float = 0.15,
     random_state: int = 42,
     save_artifacts: Optional[Path] = None,
-) -> Tuple[DataLoader, DataLoader, DataLoader, LabelEncoder, StandardScaler, list]:
+    feature_subset: Optional[list] = None,
+) -> Tuple[DataLoader, DataLoader, DataLoader, LabelEncoder, StandardScaler, list, np.ndarray]:
     """
     Build train/val/test DataLoaders from CSV or DataFrame.
-    
+
     Returns:
-        train_loader, val_loader, test_loader, label_encoder, scaler, feature_names
+        train_loader, val_loader, test_loader, label_encoder, scaler, feature_names, class_weights
     """
     # Load data
     if df is None:
@@ -127,30 +128,47 @@ def build_dataloaders(
     
     # Extract features
     feature_cols = [c for c in df.columns if c != label_col]
+
+    # Filter to subset if specified (e.g., Suricata-available features only)
+    if feature_subset is not None:
+        missing = [f for f in feature_subset if f not in feature_cols]
+        if missing:
+            raise ValueError(f"Feature subset contains unknown columns: {missing}")
+        feature_cols = [c for c in feature_subset if c in feature_cols]
+        print(f"[*] Using feature subset: {len(feature_cols)} features")
+
     features = df[feature_cols].values.astype(np.float32)
     
     print(f"[*] Features: {features.shape[1]}, Samples: {features.shape[0]:,}")
     
-    # Normalize
-    scaler = StandardScaler()
-    features = scaler.fit_transform(features)
-    
-    # Stratified split
-    X_train, X_temp, y_train, y_temp = train_test_split(
+    # Stratified split BEFORE normalization to prevent data leakage
+    X_train_raw, X_temp_raw, y_train, y_temp = train_test_split(
         features, labels,
         test_size=(val_split + test_split),
         stratify=labels,
         random_state=random_state
     )
-    
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp, y_temp,
+
+    X_val_raw, X_test_raw, y_val, y_test = train_test_split(
+        X_temp_raw, y_temp,
         test_size=test_split / (val_split + test_split),
         stratify=y_temp,
         random_state=random_state
     )
-    
+
+    # Fit scaler on training data ONLY
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train_raw)
+    X_val = scaler.transform(X_val_raw)
+    X_test = scaler.transform(X_test_raw)
+
+    # Compute class weights for imbalanced data
+    class_counts = np.bincount(y_train)
+    class_weights = 1.0 / np.maximum(class_counts, 1).astype(np.float32)
+    class_weights = class_weights / class_weights.sum() * len(class_counts)
+
     print(f"[*] Split: train={len(y_train):,}, val={len(y_val):,}, test={len(y_test):,}")
+    print(f"[*] Class weights: {dict(zip(label_encoder.classes_, class_weights.round(4)))}")
     
     # Create DataLoaders
     train_loader = DataLoader(
@@ -186,14 +204,14 @@ def build_dataloaders(
             pickle.dump(feature_cols, f)
         print(f"[✓] Saved artifacts to {save_artifacts}")
     
-    return train_loader, val_loader, test_loader, label_encoder, scaler, feature_cols
+    return train_loader, val_loader, test_loader, label_encoder, scaler, feature_cols, class_weights
 
 
 if __name__ == "__main__":
     # Test with CICIDS2017
     data_dir = Path(__file__).parent.parent / "data"
     df = load_cicids2017(data_dir)
-    train_loader, val_loader, test_loader, le, scaler, features = build_dataloaders(
+    train_loader, val_loader, test_loader, le, scaler, features, class_weights = build_dataloaders(
         df=df,
         batch_size=256,
         save_artifacts=data_dir / "artifacts"

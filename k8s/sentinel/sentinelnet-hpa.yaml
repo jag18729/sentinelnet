@@ -1,0 +1,37 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sentinelnet-api
+  namespace: sentinel
+  labels:
+    app: sentinelnet
+    component: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sentinelnet-api
+  minReplicas: 1
+  maxReplicas: 3  # Pi 5 has 8GB RAM; 3 pods x 1Gi limit = safe headroom
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sentinelnet-api
+  namespace: sentinel
+  labels:
+    app: sentinelnet
+    component: api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sentinelnet
+      component: api
