@@ -189,10 +189,11 @@ Good morning. Here is your overnight status report.""", dry_run)
     for name, status in checks.items():
         icon = "\u2705" if status == "UP" else "\u274c"
         check_lines.append(f"  {icon} {name}")
+    check_block = "\n".join(check_lines)
 
     send(f"""{fleet_icon} <b>FLEET STATUS</b> [{fleet_status}] ({up_count}/{total_count})
 
-<code>{"chr(10)".join(check_lines)}</code>""", dry_run)
+<code>{check_block}</code>""", dry_run)
 
     time.sleep(1)
 
