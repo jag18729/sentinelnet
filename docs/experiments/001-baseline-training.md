@@ -203,16 +203,20 @@ All saved to `~/workspace/projects/sentinelnet/checkpoints/` on XPS:
 
 ## 9. Next Steps
 
-| Priority | Task | Description |
-|----------|------|-------------|
-| **P0** | Per-class analysis | Generate confusion matrix, per-class precision/recall/F1, identify weak attack categories |
-| **P0** | ONNX export | Export best.pt to ONNX for pi2 inference deployment |
-| **P1** | Class weighting | Re-train with `CrossEntropyLoss(weight=...)` based on inverse class frequency |
-| **P1** | Warm restarts | Switch to CosineAnnealingWarmRestarts (T_0=10, T_mult=2) |
-| **P2** | Cross-dataset eval | Test on CSE-CIC-IDS2018 without retraining (zero-shot transfer) |
-| **P2** | Pi 5 benchmark | Measure inference latency on pi2 (ONNX Runtime, single-flow and batch) |
-| **P3** | PA-220 integration | Feed PA-220 traffic logs → feature extraction → SentinelNet inference → zone-aware alerting |
-| **P3** | Ablation study | Compare SentinelNet vs BaselineMLP, CNN-only, LSTM-only variants |
+| Priority | Task | Status | Description |
+|----------|------|--------|-------------|
+| **P0** | Per-class analysis | Pending | Generate confusion matrix, per-class precision/recall/F1, identify weak attack categories |
+| **P0** | ONNX export | ✅ Done | Export best.pt to ONNX for pi2 inference deployment |
+| **P1** | Class weighting | ✅ Done (Apr 2026) | Inverse-frequency weights added to `CrossEntropyLoss`. Requires retrain on XPS. |
+| **P1** | Data leakage fix | ✅ Done (Apr 2026) | StandardScaler now fit on train split only. Requires retrain — expect slight accuracy change. |
+| **P1** | Adversarial training | ✅ Done (Apr 2026) | PGD adversarial training loop implemented. Configurable epsilon/steps/ratio. |
+| **P1** | Model versioning | ✅ Done (Apr 2026) | SHA256 checksum generated on export, verified on load. |
+| **P1** | Warm restarts | Pending | Switch to CosineAnnealingWarmRestarts (T_0=10, T_mult=2) |
+| **P2** | Cross-dataset eval | Pending | Test on CSE-CIC-IDS2018 without retraining (zero-shot transfer) |
+| **P2** | Pi 5 benchmark | Pending | Measure inference latency on pi2 (ONNX Runtime, single-flow and batch) |
+| **P3** | Ablation study | Pending | Compare SentinelNet vs BaselineMLP, CNN-only, LSTM-only variants |
+
+**Note (April 2026):** The class weighting and data leakage fixes require retraining on the XPS GPU. The current deployed model (`best.pt`, epoch 40) does not include these fixes. Once retrained, the baseline numbers in this report should be compared against the new model's per-class metrics, especially for Bot (37.5%), Web Attack–Brute Force (0%), and Web Attack–XSS (0%) which are expected to improve with class weighting.
 
 ## 10. Reproducibility
 

@@ -30,6 +30,8 @@ The extractor maps Suricata flow-level data to 25 CICIDS2017 features:
 
 Unavailable features are set to 0 and produce constant normalized values. This is documented and validated at startup. For full feature coverage, packet-level capture via Zeek or a SPAN port sensor is needed.
 
+A **feature manifest** (`data/artifacts/feature_manifest.json`) defines the canonical 25-feature subset as `features_suricata_25` with index mappings to the full 78-feature set. A **reduced-feature training config** (`training/configs/suricata_reduced.yaml`) enables training a model specifically for this subset, eliminating the distribution shift from zeroed features.
+
 ## Alert Tiers
 
 | Severity | Condition | Actions |

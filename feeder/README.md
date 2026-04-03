@@ -28,14 +28,14 @@ journalctl -u sentinelnet-feeder -f
 
 ## Configuration
 
-Edit constants at the top of `feeder.py`:
+All settings are configurable via environment variables (set in systemd unit or shell):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INTERFACE` | `end1` | Network interface to sniff (SPAN port) |
-| `INFER_URL` | `http://100.111.113.35:30800/predict` | Pi2 SentinelNet API via Tailscale |
-| `IDLE_TO` | `15` | Seconds before expiring idle flows |
-| `ACTIVE_TO` | `600` | Max flow duration before forced export |
+| `FEEDER_INTERFACE` | `end1` | Network interface to sniff (SPAN port) |
+| `SENTINELNET_URL` | `http://localhost:30800/predict` | SentinelNet inference API endpoint |
+| `FEEDER_IDLE_TIMEOUT` | `15` | Seconds before expiring idle flows |
+| `FEEDER_ACTIVE_TIMEOUT` | `600` | Max flow duration before forced export |
 
 ## Architecture
 

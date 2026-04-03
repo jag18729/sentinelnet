@@ -72,10 +72,14 @@ Suricata (AF_PACKET, host network)
               │
     sentinelnet.service (FastAPI + ONNX Runtime)
          │
+         ├── Lifespan-managed startup (model load + warm-up)
+         ├── Feature dimension validation at startup
+         ├── SHA256 model integrity verification
          ├── ONNX model inference (15-class classifier)
          ├── Softmax probability distribution per flow
          ├── Prometheus metrics (/metrics endpoint)
-         └── Batch prediction support (/predict/batch)
+         ├── Batch prediction support (/predict/batch)
+         └── HPA autoscaling (1-3 replicas, CPU-based)
 ```
 
 ### Attack Classes (CICIDS2017)
@@ -167,26 +171,52 @@ Pi2 resides in the `dmz-security` zone (192.168.22.0/24). Relevant policies:
 
 All inter-zone traffic is logged. Default deny applies to any traffic not explicitly permitted.
 
-## Future Work
+## Recent Changes (April 2026 Upgrade)
 
-### Phase 2: Full Feature Extraction
-- Deploy NFStream for 78-feature CICIDS2017-compatible extraction
-- Train improved model on XPS GPU (RTX 4060 Ti, CICIDS2017 dataset)
-- Export quantized ONNX model, deploy to pi2
+### Production Hardening (Complete)
+- Migrated FastAPI to lifespan context manager (removed deprecated `@app.on_event`)
+- ONNX session warm-up at startup (prevents cold-start latency exceeding 500ms SLA)
+- Feature dimension validation at startup (fail-fast on model/artifact mismatch)
+- SHA256 model integrity verification on load
+- Prometheus alerting rules (`monitoring/prometheus_rules.yaml`)
+- K3s HPA (1-3 replicas) + PodDisruptionBudget
+- Hard-coded IPs replaced with env vars across feeder and bridge
 
-### Phase 3: Multi-Sensor Architecture
-- Orange Pi RV2 (RISC-V) as edge IDS sensor on PA-220 SPAN port
-- Heterogeneous architecture: ARM (Pi 5) + RISC-V (Orange Pi) + x86 (training)
-- Edge ONNX pre-filtering with INT8 quantized binary classifier
-- Centralized deep analysis on pi2 PyTorch pipeline
+### Training Pipeline Fixes (Complete)
+- **Data leakage fix:** StandardScaler now fit on training split only (was fit on full dataset before split)
+- **Class weighting:** Inverse-frequency weights for CICIDS2017 imbalance (BENIGN: 2.27M vs Heartbleed: 11)
+- **Feature manifest:** `data/artifacts/feature_manifest.json` — single source of truth for feature names/indices
+- **Reduced-feature config:** `training/configs/suricata_reduced.yaml` for Suricata bridge path (25 features)
 
-### Phase 4: Adversarial Robustness Research
-- FGSM, PGD, C&W attacks against trained classifier
-- Adversarial training with ε-bounded perturbations
-- Feature-space vs. problem-space attack comparison
-- Defense evaluation: adversarial training, input gradient regularization, ensemble methods
+### Adversarial Robustness (Complete)
+- PGD adversarial training loop (`train_adversarial_epoch()` in `training/train.py`)
+- Configurable epsilon, steps, clean/adversarial ratio
+- FGSM + PGD-20 robustness evaluation in ONNX export validation
+- Robustness warning threshold if PGD accuracy < 50%
+
+## Remaining Work
+
+### Integration Tests (Next)
+- Feature contract tests (verify order consistency across components)
+- End-to-end tests (EVE record → extraction → predict → response)
+- Feeder flow tests (78-feature order validation)
+- Target: 63% → 85%+ coverage
+
+### Retrain with Fixes
+- Class-weighted CrossEntropyLoss + train-only scaler
+- Reduced-feature model for Suricata bridge path
+- Adversarial training evaluation (FGSM/PGD accuracy drop)
+
+### Full Feature Extraction
+- Evaluate NFStream on ARM64 for 78-feature Suricata path
+- Dual-path validation: full 78-feature (Scapy) vs reduced (Suricata) model comparison
+
+### Research Paper
+- Adversarial robustness evaluation results
+- Production deployment analysis (1M+ predictions)
+- Feature-space constraint analysis
 
 ---
 
-*Deployed: 2026-02-13 | Pi2 (dmz-security) behind PA-220 reveal-fw*
-*Pipeline: Suricata 8.0.3 → SentinelNet Bridge v0.2 → ONNX Runtime (15-class)*
+*Deployed: 2026-02-13, upgraded 2026-04-02 | Pi2 (dmz-security) behind PA-220 reveal-fw*
+*Pipeline: Suricata 7.0.5 → SentinelNet Bridge v0.3 → ONNX Runtime (15-class)*
