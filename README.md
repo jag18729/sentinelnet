@@ -109,22 +109,36 @@ sudo systemctl restart sentinelnet
 | Pi2 (K3s) | sentinelnet metrics | 30800 | `curl http://100.111.113.35:30800/metrics` |
 | RV2 | sentinelnet-feeder | -- | `systemctl status sentinelnet-feeder` |
 | RV2 | Suricata IDS | -- | 74K rules, EVE JSON to Loki |
+| RV2 | rv2-llm (Qwen2 1.5B) | 8090 | `curl http://100.118.229.114:8090/health` |
+| Pi2 | fleet-triage-filter (timer) | -- | `systemctl status fleet-triage-filter.timer` |
+| Pi2 | fleet-triage-summarize (timer) | -- | `systemctl status fleet-triage-summarize.timer` |
+
+## Triage Pipeline
+
+The [`triage/`](./triage/) subsystem is a two-tier LLM pipeline for Wazuh HIDS alerts. Tier 1 is the RV2 small-model classifier (Qwen2 1.5B int4 on Ky X1 RISC-V via onnxruntime-genai). Tier 2 is XPS Gemma 4 e4b on an RTX 4060 Ti, producing operator markdown reports and acting as a self-supervised teacher that ingests disagreements as cached "lessons". A conservative promotion threshold (default 3) keeps inconsistent teacher verdicts out of the cache. Once promoted, lessons short-circuit Tier 1 in milliseconds instead of 50 seconds per alert.
+
+The pipeline runs on Pi2 systemd timers (filter every 5 min, summarizer every 30 min) and persists state under `/var/lib/fleet-triage/`. See [triage/README.md](./triage/README.md) for the full architecture, deployment guide, and lesson cache reference.
 
 ## Docs
 
-- [PROPOSAL.md](./PROPOSAL.md) — Research proposal
-- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — Full deployment architecture, feature mapping, firewall policy, benchmarks
-- [docs/experiments/001-baseline-training.md](./docs/experiments/001-baseline-training.md) — Baseline training report (99.72% test accuracy)
-- [pipeline/README.md](./pipeline/README.md) — Exfil detection pipeline
-- [feeder/README.md](./feeder/README.md) — RISC-V edge feeder
-- [data/artifacts/feature_manifest.json](./data/artifacts/feature_manifest.json) — Feature name/index contract
+- [PROPOSAL.md](./PROPOSAL.md): Research proposal
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): Full deployment architecture, feature mapping, firewall policy, benchmarks
+- [docs/experiments/001-baseline-training.md](./docs/experiments/001-baseline-training.md): Baseline training report (99.72% test accuracy)
+- [pipeline/README.md](./pipeline/README.md): Exfil detection pipeline
+- [feeder/README.md](./feeder/README.md): RISC-V edge feeder
+- [data/artifacts/feature_manifest.json](./data/artifacts/feature_manifest.json): Feature name/index contract
+- [triage/README.md](./triage/README.md): Fleet Triage subsystem overview
+- [triage/docs/ARCHITECTURE.md](./triage/docs/ARCHITECTURE.md): Tier breakdown, failure modes, design rationale
+- [triage/docs/LESSON_CACHE.md](./triage/docs/LESSON_CACHE.md): Self-supervised learning loop and operator CLI reference
+- [triage/docs/DEPLOYMENT.md](./triage/docs/DEPLOYMENT.md): Triage install procedure
 
 ## Hardware
 
 | Node | Role | Specs |
 |------|------|-------|
-| Pi2 | K3s inference API + Wazuh HIDS | Pi 5, 16GB, ARM Cortex-A76 |
-| Orange Pi RV2 | Edge sensor + scapy feeder | RISC-V, 4GB, SPAN on USW-Lite-8-PoE port 7 |
+| Pi2 | K3s inference API + Wazuh HIDS + triage host | Pi 5, 16GB, ARM Cortex-A76 |
+| Orange Pi RV2 | Edge sensor + scapy feeder + Qwen2 1.5B LLM API | Ky(R) X1 RISC-V (8c), 7.7GB RAM, 458GB NVMe, SPAN on USW-Lite-8-PoE port 7 |
+| XPS | Triage GPU inference (Gemma 4 e4b via Ollama) | i7-11700, 16GB RAM, RTX 4060 Ti 8GB VRAM, WSL2 |
 | PA-220 | Firewall | PAN-OS 10.2, 4 DMZ zones, physical microsegmentation |
 | USW-Lite-8-PoE | SPAN switch | Port 7 mirrors port 8 (UDM uplink) |
 
