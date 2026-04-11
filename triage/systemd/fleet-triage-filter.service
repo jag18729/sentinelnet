@@ -1,0 +1,16 @@
+[Unit]
+Description=Fleet triage filter (Wazuh -> RV2 classifier -> queue)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rafaeljg
+Group=rafaeljg
+SupplementaryGroups=docker
+ExecStart=/usr/local/bin/fleet-triage-filter.py
+TimeoutStartSec=15min
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

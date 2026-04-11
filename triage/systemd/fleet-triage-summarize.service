@@ -1,0 +1,15 @@
+[Unit]
+Description=Fleet triage summarizer (queue -> XPS Gemma 4 -> markdown)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=rafaeljg
+Group=rafaeljg
+ExecStart=/usr/local/bin/fleet-triage-summarize.py
+TimeoutStartSec=10min
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
