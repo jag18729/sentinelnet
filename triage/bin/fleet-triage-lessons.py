@@ -139,6 +139,15 @@ def cmd_stats(args):
             print(f"  {l['lesson_id'][:12]} hits={l.get('hits')} {p.get('agent')}/r{p.get('rule_id')} -> {c.get('severity')}/{c.get('action')}")
 
 
+
+def cmd_prune(args):
+    lessons = ftc.load_lessons()
+    before = len(lessons)
+    lessons, removed = ftc.prune_stale_lessons(lessons, max_age_days=args.days)
+    if removed > 0:
+        ftc.save_lessons(lessons)
+    print(f"pruned {removed} stale lessons ({before} -> {len(lessons)})")
+
 def main():
     parser = argparse.ArgumentParser(prog="fleet-triage-lessons", description="Manage the fleet triage lesson store")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -167,6 +176,10 @@ def main():
 
     p_stats = sub.add_parser("stats", help="Show summary statistics")
     p_stats.set_defaults(func=cmd_stats)
+
+    p_prune = sub.add_parser("prune", help="Remove stale lessons older than N days")
+    p_prune.add_argument("--days", type=int, default=90, help="Max age in days (default 90)")
+    p_prune.set_defaults(func=cmd_prune)
 
     args = parser.parse_args()
     args.func(args)

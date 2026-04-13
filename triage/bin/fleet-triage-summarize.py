@@ -280,13 +280,14 @@ def run_teacher_pass(entries):
         disagreements += 1
 
     promoted = ftc.promote_eligible(lessons)
+    lessons, pruned = ftc.prune_stale_lessons(lessons)
     try:
         ftc.save_lessons(lessons)
     except Exception as e:
         log(f"teacher: failed to save lessons: {e}")
         return
 
-    log(f"teacher: {len(verifications)} reviewed, {disagreements} disagreements, {promoted} promoted")
+    log(f"teacher: {len(verifications)} reviewed, {disagreements} disagreements, {promoted} promoted, {pruned} pruned")
 
 
 def main():

@@ -259,8 +259,6 @@ class NormalizationTests(unittest.TestCase):
         self.assertIsNone(ftc.normalize_action(None))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
 
 
 class WhitespaceMatchingTests(unittest.TestCase):
@@ -296,3 +294,73 @@ class WhitespaceMatchingTests(unittest.TestCase):
             "full_log": "tcp6 0 0 :::2049 LISTEN",
         }
         self.assertEqual(ftc.match_lesson(alert, [broken]), broken)
+
+class CoherenceTests(unittest.TestCase):
+    def test_noise_forces_ignore(self):
+        sev, act, c = ftc.enforce_coherence("noise", "investigate")
+        self.assertEqual((sev, act, c), ("noise", "ignore", True))
+
+    def test_critical_forces_escalate(self):
+        sev, act, c = ftc.enforce_coherence("critical", "log")
+        self.assertEqual((sev, act, c), ("critical", "escalate", True))
+
+    def test_low_forces_log(self):
+        sev, act, c = ftc.enforce_coherence("low", "escalate")
+        self.assertEqual((sev, act, c), ("low", "log", True))
+
+    def test_low_ignore_stays(self):
+        sev, act, c = ftc.enforce_coherence("low", "ignore")
+        self.assertEqual((sev, act, c), ("low", "ignore", False))
+
+    def test_high_ignore_upgrades(self):
+        sev, act, c = ftc.enforce_coherence("high", "ignore")
+        self.assertEqual((sev, act, c), ("high", "investigate", True))
+
+    def test_medium_investigate_unchanged(self):
+        sev, act, c = ftc.enforce_coherence("medium", "investigate")
+        self.assertEqual((sev, act, c), ("medium", "investigate", False))
+
+    def test_high_escalate_unchanged(self):
+        sev, act, c = ftc.enforce_coherence("high", "escalate")
+        self.assertEqual((sev, act, c), ("high", "escalate", False))
+
+    def test_critical_escalate_unchanged(self):
+        sev, act, c = ftc.enforce_coherence("critical", "escalate")
+        self.assertEqual((sev, act, c), ("critical", "escalate", False))
+
+class PruneTests(unittest.TestCase):
+    def test_prunes_old_pending(self):
+        lessons = [
+            {"lesson_id": "a", "status": "pending", "last_seen_at": "2020-01-01T00:00:00Z", "hits": 0},
+            {"lesson_id": "b", "status": "pending", "last_seen_at": "2099-01-01T00:00:00Z", "hits": 0},
+        ]
+        kept, removed = ftc.prune_stale_lessons(lessons, max_age_days=90)
+        self.assertEqual(removed, 1)
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["lesson_id"], "b")
+
+    def test_prunes_old_auth_zero_hits(self):
+        lessons = [
+            {"lesson_id": "a", "status": "authoritative", "last_seen_at": "2020-01-01T00:00:00Z", "hits": 0},
+        ]
+        kept, removed = ftc.prune_stale_lessons(lessons, max_age_days=90)
+        self.assertEqual(removed, 1)
+
+    def test_keeps_old_auth_with_hits(self):
+        lessons = [
+            {"lesson_id": "a", "status": "authoritative", "last_seen_at": "2020-01-01T00:00:00Z", "hits": 5},
+        ]
+        kept, removed = ftc.prune_stale_lessons(lessons, max_age_days=90)
+        self.assertEqual(removed, 0)
+        self.assertEqual(len(kept), 1)
+
+    def test_keeps_recent_pending(self):
+        lessons = [
+            {"lesson_id": "a", "status": "pending", "last_seen_at": "2099-01-01T00:00:00Z", "hits": 0},
+        ]
+        kept, removed = ftc.prune_stale_lessons(lessons, max_age_days=90)
+        self.assertEqual(removed, 0)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

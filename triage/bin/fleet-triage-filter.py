@@ -203,6 +203,12 @@ def main():
             compact = ftc.extract_compact_alert(a)
             alert_id = a.get("id")
             result, hit_lesson = classify(compact, lessons, rv2_up)
+            sev, act, corrected = ftc.enforce_coherence(result.get("severity"), result.get("action"))
+            if corrected:
+                log(f"coherence fix for {alert_id}: {result.get('severity')}/{result.get('action')} -> {sev}/{act}")
+                result["severity"] = sev
+                result["action"] = act
+                result["coherence_corrected"] = True
             if hit_lesson is not None:
                 hit_lesson["hits"] = hit_lesson.get("hits", 0) + 1
                 hit_lesson["last_seen_at"] = ftc.utcnow_iso()

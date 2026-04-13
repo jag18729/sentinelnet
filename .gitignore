@@ -11,6 +11,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!triage/lib/
 lib64/
 parts/
 sdist/
